@@ -370,3 +370,88 @@ export function detectStateAndDistrict(input, addressObj = null) {
   return { state: matchedState, district: matchedDistrict };
 }
 
+export const STATE_CENTERS = {
+  "Andaman and Nicobar Islands": { center: [11.7401, 92.6586], zoom: 7 },
+  "Andhra Pradesh": { center: [15.9129, 79.7400], zoom: 7 },
+  "Arunachal Pradesh": { center: [28.2180, 94.7278], zoom: 7 },
+  "Assam": { center: [26.2006, 92.9376], zoom: 7 },
+  "Bihar": { center: [25.0961, 85.3131], zoom: 7 },
+  "Chandigarh": { center: [30.7333, 76.7794], zoom: 12 },
+  "Chhattisgarh": { center: [21.2787, 81.8661], zoom: 7 },
+  "Dadra and Nagar Haveli and Daman and Diu": { center: [20.4283, 72.8397], zoom: 9 },
+  "Delhi": { center: [28.7041, 77.1025], zoom: 11 },
+  "Goa": { center: [15.2993, 74.1240], zoom: 10 },
+  "Gujarat": { center: [22.2587, 71.1924], zoom: 7 },
+  "Haryana": { center: [29.0588, 76.0856], zoom: 8 },
+  "Himachal Pradesh": { center: [31.1048, 77.1734], zoom: 7 },
+  "Jammu and Kashmir": { center: [33.7782, 76.5762], zoom: 7 },
+  "Jharkhand": { center: [23.6102, 85.2799], zoom: 7 },
+  "Karnataka": { center: [15.3173, 75.7139], zoom: 7 },
+  "Kerala": { center: [10.8505, 76.2711], zoom: 7 },
+  "Ladakh": { center: [34.1526, 77.5771], zoom: 7 },
+  "Lakshadweep": { center: [10.5667, 72.6417], zoom: 9 },
+  "Madhya Pradesh": { center: [22.9734, 78.6569], zoom: 6 },
+  "Maharashtra": { center: [19.7515, 75.7139], zoom: 7 },
+  "Manipur": { center: [24.6637, 93.9063], zoom: 8 },
+  "Meghalaya": { center: [25.4670, 91.3662], zoom: 8 },
+  "Mizoram": { center: [23.1645, 92.9376], zoom: 8 },
+  "Nagaland": { center: [26.1584, 94.5624], zoom: 8 },
+  "Odisha": { center: [20.9517, 85.0985], zoom: 7 },
+  "Puducherry": { center: [11.9416, 79.8083], zoom: 11 },
+  "Punjab": { center: [31.1471, 75.3412], zoom: 8 },
+  "Rajasthan": { center: [27.0238, 74.2179], zoom: 6 },
+  "Sikkim": { center: [27.5330, 88.5122], zoom: 9 },
+  "Tamil Nadu": { center: [11.1271, 78.6569], zoom: 7 },
+  "Telangana": { center: [18.1124, 79.0193], zoom: 7 },
+  "Tripura": { center: [23.9408, 91.9882], zoom: 8 },
+  "Uttar Pradesh": { center: [26.8467, 80.9462], zoom: 6 },
+  "Uttarakhand": { center: [30.0668, 79.0193], zoom: 7 },
+  "West Bengal": { center: [22.9868, 87.8550], zoom: 7 }
+};
+
+const districtCoordCache = new Map();
+
+export async function getDistrictCoordinates(districtName, stateName = '') {
+  if (!districtName) return null;
+  const cleanName = districtName.split('(')[0].trim();
+  const cacheKey = `${cleanName}-${stateName}`.toLowerCase();
+  if (districtCoordCache.has(cacheKey)) {
+    return districtCoordCache.get(cacheKey);
+  }
+
+  try {
+    const query = encodeURIComponent(`${cleanName}, ${stateName}, India`.trim());
+    const res = await fetch(`https://photon.komoot.io/api/?q=${query}&limit=1`);
+    if (res.ok) {
+      const data = await res.json();
+      const feature = data?.features?.[0];
+      if (feature?.geometry?.coordinates) {
+        const [lng, lat] = feature.geometry.coordinates;
+        const extent = feature.properties?.extent;
+        let bounds = null;
+        if (extent && extent.length === 4) {
+          const south = Math.min(extent[1], extent[3]);
+          const north = Math.max(extent[1], extent[3]);
+          const west = Math.min(extent[0], extent[2]);
+          const east = Math.max(extent[0], extent[2]);
+          bounds = [
+            [south, west],
+            [north, east],
+          ];
+        }
+        const result = { center: [lat, lng], zoom: 11, bounds };
+        districtCoordCache.set(cacheKey, result);
+        return result;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not geocode district coordinates:', err);
+  }
+
+  if (stateName && STATE_CENTERS[stateName]) {
+    return { ...STATE_CENTERS[stateName], bounds: null };
+  }
+  return null;
+}
+
+

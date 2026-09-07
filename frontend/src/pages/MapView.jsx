@@ -9,7 +9,7 @@ import { reportService, referenceService } from '../services';
 const SEVERITIES = ['Low', 'Moderate', 'High', 'Critical'];
 const STATUSES = ['Reported', 'Verified', 'Assigned', 'In Progress', 'Resolved'];
 
-import { ALL_INDIAN_STATES } from '../data/indianDistricts.js';
+import { ALL_INDIAN_STATES, STATE_CENTERS, getDistrictCoordinates } from '../data/indianDistricts.js';
 
 export default function MapView() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -21,6 +21,7 @@ export default function MapView() {
   const [districts, setDistricts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [mapFlyTo, setMapFlyTo] = useState(null);
 
   const filters = {
     district_id: searchParams.get('district') || '',
@@ -45,7 +46,16 @@ export default function MapView() {
         const initialDistId = searchParams.get('district');
         if (initialDistId && dist) {
           const match = dist.find((d) => String(d.id) === String(initialDistId));
-          if (match && match.state) setSelectedState(match.state);
+          if (match) {
+            if (match.state) setSelectedState(match.state);
+            getDistrictCoordinates(match.name, match.state).then((coords) => {
+              if (coords) {
+                setMapFlyTo({ ...coords, _t: Date.now() });
+              } else if (match.state && STATE_CENTERS[match.state]) {
+                setMapFlyTo({ ...STATE_CENTERS[match.state], _t: Date.now() });
+              }
+            });
+          }
         }
       } catch {
         // ignore
@@ -102,7 +112,40 @@ export default function MapView() {
     setSearchParams(next);
   };
 
-  const clearFilters = () => setSearchParams({});
+  const handleStateChange = (newState) => {
+    setSelectedState(newState);
+    updateFilter('district', '');
+    if (newState && STATE_CENTERS[newState]) {
+      setMapFlyTo({ ...STATE_CENTERS[newState], _t: Date.now() });
+    } else if (!newState) {
+      setMapFlyTo({ center: [22.3511, 78.6677], zoom: 5, _t: Date.now() });
+    }
+  };
+
+  const handleDistrictChange = async (districtId) => {
+    updateFilter('district', districtId);
+    if (!districtId) {
+      if (selectedState && STATE_CENTERS[selectedState]) {
+        setMapFlyTo({ ...STATE_CENTERS[selectedState], _t: Date.now() });
+      }
+      return;
+    }
+    const match = districts.find((d) => String(d.id) === String(districtId));
+    if (match) {
+      const coords = await getDistrictCoordinates(match.name, match.state || selectedState);
+      if (coords) {
+        setMapFlyTo({ ...coords, _t: Date.now() });
+      } else if (selectedState && STATE_CENTERS[selectedState]) {
+        setMapFlyTo({ ...STATE_CENTERS[selectedState], _t: Date.now() });
+      }
+    }
+  };
+
+  const clearFilters = () => {
+    setSelectedState('');
+    setSearchParams({});
+    setMapFlyTo({ center: [22.3511, 78.6677], zoom: 5, _t: Date.now() });
+  };
 
   const summary = useMemo(() => ({
     total: reports.length,
@@ -125,11 +168,7 @@ export default function MapView() {
             <select
               className="input text-sm py-1.5 min-w-[150px]"
               value={selectedState}
-              onChange={(e) => {
-                const newState = e.target.value;
-                setSelectedState(newState);
-                updateFilter('district', '');
-              }}
+              onChange={(e) => handleStateChange(e.target.value)}
             >
               <option value="">All States</option>
               {states.map((s) => (
@@ -142,7 +181,7 @@ export default function MapView() {
             <select
               className={`input text-sm py-1.5 min-w-[160px] ${!selectedState ? 'opacity-60 cursor-not-allowed' : ''}`}
               value={filters.district_id}
-              onChange={(e) => updateFilter('district', e.target.value)}
+              onChange={(e) => handleDistrictChange(e.target.value)}
               disabled={!selectedState}
             >
               <option value="">
@@ -235,8 +274,9 @@ export default function MapView() {
           heatmap={heatmapPoints}
           showHeatmap={showHeatmap}
           height="600px"
-          center={[18.5204, 73.8567]}
-          zoom={12}
+          center={[22.3511, 78.6677]}
+          zoom={5}
+          flyTo={mapFlyTo}
         />
       </div>
 

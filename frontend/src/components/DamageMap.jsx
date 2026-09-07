@@ -51,8 +51,9 @@ function createSeverityIcon(severity) {
 export default function DamageMap({
   reports = [],
   heatmap = [],
-  center = [18.5204, 73.8567],
-  zoom = 12,
+  center = [20.5937, 78.9629],
+  zoom = 5,
+  flyTo = null,
   onMarkerClick,
   showHeatmap = false,
   height = '500px',
@@ -92,6 +93,24 @@ export default function DamageMap({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Handle flying/zooming to state/district or center changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (flyTo) {
+      if (flyTo.bounds && flyTo.bounds.length === 2) {
+        if (typeof mapRef.current.flyToBounds === 'function') {
+          mapRef.current.flyToBounds(flyTo.bounds, { maxZoom: 13, duration: 1.2 });
+        } else {
+          mapRef.current.fitBounds(flyTo.bounds, { maxZoom: 13 });
+        }
+      } else if (flyTo.center) {
+        mapRef.current.flyTo(flyTo.center, flyTo.zoom || 11, { duration: 1.2 });
+      }
+    } else if (center) {
+      mapRef.current.flyTo(center, zoom, { duration: 1.2 });
+    }
+  }, [flyTo, center, zoom]);
 
   // Update markers when reports change
   useEffect(() => {

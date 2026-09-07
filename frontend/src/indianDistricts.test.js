@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   INDIAN_STATES_AND_DISTRICTS,
   ALL_INDIAN_STATES,
+  STATE_CENTERS,
   getDistrictsForState,
   detectStateAndDistrict,
+  getDistrictCoordinates,
 } from './data/indianDistricts.js';
 
 describe('Indian States and Districts Frontend Dataset', () => {
@@ -103,5 +105,22 @@ describe('Indian States and Districts Frontend Dataset', () => {
     const res3 = detectStateAndDistrict(nominatimDelhi.display_name, nominatimDelhi.address);
     expect(res3.state).toBe('Delhi');
     expect(res3.district).toBe('New Delhi');
+  });
+
+  it('provides map centers and zoom for all 36 States and UTs', () => {
+    for (const state of ALL_INDIAN_STATES) {
+      expect(STATE_CENTERS[state]).toBeDefined();
+      expect(STATE_CENTERS[state].center.length).toBe(2);
+      expect(STATE_CENTERS[state].zoom).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it('resolves district coordinates and bounding box or state center', async () => {
+    const coords = await getDistrictCoordinates('Erode', 'Tamil Nadu');
+    expect(coords).toBeDefined();
+    expect(coords.center.length).toBe(2);
+    // Erode latitude is ~11.x, longitude ~77.x
+    expect(coords.center[0]).toBeGreaterThan(10);
+    expect(coords.center[0]).toBeLessThan(13);
   });
 });
