@@ -11,6 +11,7 @@ export default function SubmitReport() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const fileInputRef = useRef(null);
+  const districtsRef = useRef([]);
 
   const [infraTypes, setInfraTypes] = useState([]);
   const [states, setStates] = useState(ALL_INDIAN_STATES);
@@ -19,6 +20,10 @@ export default function SubmitReport() {
   const [loadingRefs, setLoadingRefs] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [locating, setLocating] = useState(false);
+
+  useEffect(() => {
+    districtsRef.current = districts;
+  }, [districts]);
 
   const [form, setForm] = useState({
     title: '',
@@ -42,6 +47,7 @@ export default function SubmitReport() {
         ]);
         setInfraTypes(types);
         setDistricts(dist);
+        districtsRef.current = dist || [];
         if (fetchedStates && fetchedStates.length > 0) {
           setStates(fetchedStates);
         }
@@ -70,24 +76,50 @@ export default function SubmitReport() {
         }));
         toast.success('GPS location captured.');
 
-        // Auto-populate street address from Nominatim
+        // Auto-populate street address, state, and district from Nominatim
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=en`,
+            { headers: { 'Accept-Language': 'en' } }
+          );
           if (res.ok) {
             const data = await res.json();
-            if (data && data.display_name) {
-              setForm((f) => ({ ...f, address: data.display_name }));
-              const detected = detectStateAndDistrict(data.display_name);
+            if (data) {
+              if (data.display_name) {
+                setForm((f) => ({ ...f, address: data.display_name }));
+              }
+
+              // Ensure districts array is loaded
+              let distList = districtsRef.current;
+              if (!distList || distList.length === 0) {
+                try {
+                  distList = await referenceService.districts();
+                  setDistricts(distList);
+                  districtsRef.current = distList;
+                } catch {
+                  distList = [];
+                }
+              }
+
+              const detected = detectStateAndDistrict(data.display_name || '', data.address || {});
               if (detected.state) {
                 setSelectedState(detected.state);
                 if (detected.district) {
-                  const match = districts.find(
-                    (d) => d.state === detected.state && d.name.toLowerCase() === detected.district.toLowerCase()
-                  );
+                  const match = distList.find((d) => {
+                    if (d.state !== detected.state) return false;
+                    const cleanDName = d.name.split('(')[0].trim().toLowerCase();
+                    const cleanDetected = detected.district.split('(')[0].trim().toLowerCase();
+                    return cleanDName === cleanDetected || d.name.toLowerCase() === detected.district.toLowerCase();
+                  });
+
                   if (match) {
                     setForm((f) => ({ ...f, district_id: String(match.id) }));
-                    toast.success(`Location identified: ${match.name}, ${detected.state}`);
+                    toast.success(`📍 Auto-detected: ${match.name}, ${detected.state}`);
+                  } else {
+                    toast.success(`📍 Auto-detected State: ${detected.state}`);
                   }
+                } else {
+                  toast.success(`📍 Auto-detected State: ${detected.state}`);
                 }
               }
             }

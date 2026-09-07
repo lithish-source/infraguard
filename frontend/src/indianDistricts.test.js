@@ -63,4 +63,45 @@ describe('Indian States and Districts Frontend Dataset', () => {
     expect(res2.state).toBe('Maharashtra');
     expect(res2.district).toBe('Pune');
   });
+
+  it('detects state and district from structured Nominatim address objects', () => {
+    // Real Nominatim structure for Chennai
+    const nominatimChennai = {
+      display_name: 'Raja Muthiah Road, Periamet, Ward 58, Zone 5 Royapuram, Chennai Corporation, Chennai, Tamil Nadu, 600001, India',
+      address: {
+        city: 'Chennai Corporation',
+        state_district: 'Chennai',
+        state: 'Tamil Nadu',
+        country: 'India',
+      },
+    };
+    const res1 = detectStateAndDistrict(nominatimChennai.display_name, nominatimChennai.address);
+    expect(res1.state).toBe('Tamil Nadu');
+    expect(res1.district).toBe('Chennai');
+
+    // Real Nominatim structure with 'District' suffix
+    const nominatimErode = {
+      display_name: 'Salem Road, Perundurai, Erode, Tamil Nadu, 638052, India',
+      address: {
+        town: 'Perundurai',
+        state_district: 'Erode District',
+        state: 'Tamil Nadu',
+      },
+    };
+    const res2 = detectStateAndDistrict(nominatimErode.display_name, nominatimErode.address);
+    expect(res2.state).toBe('Tamil Nadu');
+    expect(res2.district).toBe('Erode');
+
+    // Real Nominatim structure for NCT Delhi
+    const nominatimDelhi = {
+      display_name: 'Connaught Place, New Delhi, National Capital Territory of Delhi, 110001, India',
+      address: {
+        county: 'New Delhi',
+        state: 'National Capital Territory of Delhi',
+      },
+    };
+    const res3 = detectStateAndDistrict(nominatimDelhi.display_name, nominatimDelhi.address);
+    expect(res3.state).toBe('Delhi');
+    expect(res3.district).toBe('New Delhi');
+  });
 });

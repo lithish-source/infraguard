@@ -256,38 +256,117 @@ export function getDistrictsForState(state) {
   return [...INDIAN_STATES_AND_DISTRICTS[state]].sort();
 }
 
-export function detectStateAndDistrict(text) {
-  if (!text) return { state: '', district: '' };
-  const lower = text.toLowerCase();
+export function detectStateAndDistrict(input, addressObj = null) {
+  let text = typeof input === 'string' ? input : '';
+  const addr = (typeof input === 'object' && input !== null) ? input : (addressObj || {});
+
   let matchedState = '';
   let matchedDistrict = '';
 
-  for (const state of ALL_INDIAN_STATES) {
-    if (lower.includes(state.toLowerCase())) {
-      matchedState = state;
-      break;
+  // 1. Check address.state if present
+  if (addr && addr.state) {
+    const rawState = addr.state.trim();
+    if (/delhi/i.test(rawState)) {
+      matchedState = 'Delhi';
+    } else if (/pondicherry/i.test(rawState)) {
+      matchedState = 'Puducherry';
+    } else if (/orissa/i.test(rawState)) {
+      matchedState = 'Odisha';
+    } else if (/uttaranchal/i.test(rawState)) {
+      matchedState = 'Uttarakhand';
+    } else {
+      for (const s of ALL_INDIAN_STATES) {
+        if (s.toLowerCase() === rawState.toLowerCase() || rawState.toLowerCase().includes(s.toLowerCase())) {
+          matchedState = s;
+          break;
+        }
+      }
     }
   }
 
+  // 2. If state not matched yet from addr.state, search in text
+  if (!matchedState && text) {
+    const lower = text.toLowerCase();
+    for (const state of ALL_INDIAN_STATES) {
+      if (lower.includes(state.toLowerCase())) {
+        matchedState = state;
+        break;
+      }
+    }
+  }
+
+  // 3. Collect district candidates from structured address and text
+  const candidates = [];
+  if (addr) {
+    if (addr.state_district) candidates.push(addr.state_district);
+    if (addr.county) candidates.push(addr.county);
+    if (addr.city) candidates.push(addr.city);
+    if (addr.town) candidates.push(addr.town);
+    if (addr.municipality) candidates.push(addr.municipality);
+    if (addr.district) candidates.push(addr.district);
+    if (addr.suburb) candidates.push(addr.suburb);
+  }
+  if (text) {
+    candidates.push(...text.split(',').map((part) => part.trim()));
+  }
+
+  // Pool of districts to search in
   const pool = matchedState
-    ? INDIAN_STATES_AND_DISTRICTS[matchedState]
+    ? (INDIAN_STATES_AND_DISTRICTS[matchedState] || [])
     : Object.values(INDIAN_STATES_AND_DISTRICTS).flat();
 
-  for (const d of pool) {
-    const base = d.split('(')[0].trim().toLowerCase();
-    if (base && lower.includes(base)) {
-      matchedDistrict = d;
-      if (!matchedState) {
-        for (const [s, list] of Object.entries(INDIAN_STATES_AND_DISTRICTS)) {
-          if (list.includes(d)) {
-            matchedState = s;
-            break;
-          }
+  // Helper to clean candidate string
+  const cleanTerm = (term) => {
+    if (!term) return '';
+    return term
+      .toLowerCase()
+      .replace(/\s+(district|corporation|division|subdistrict|taluk|tehsil)/gi, '')
+      .replace(/[^\w\s]/g, '')
+      .trim();
+  };
+
+  // Step A: Check exact or clean matching across candidates
+  for (const candidate of candidates) {
+    const cleanCand = cleanTerm(candidate);
+    if (!cleanCand) continue;
+
+    for (const d of pool) {
+      const cleanDist = cleanTerm(d.split('(')[0]);
+      if (cleanDist === cleanCand) {
+        matchedDistrict = d;
+        break;
+      }
+    }
+    if (matchedDistrict) break;
+  }
+
+  // Step B: If still not matched, check substring containment
+  if (!matchedDistrict) {
+    for (const candidate of candidates) {
+      const cleanCand = cleanTerm(candidate);
+      if (!cleanCand || cleanCand.length < 4) continue;
+
+      for (const d of pool) {
+        const cleanDist = cleanTerm(d.split('(')[0]);
+        if (cleanDist.length >= 4 && (cleanCand.includes(cleanDist) || cleanDist.includes(cleanCand))) {
+          matchedDistrict = d;
+          break;
         }
       }
-      break;
+      if (matchedDistrict) break;
+    }
+  }
+
+  // If district found but state was not found initially, derive state from district
+  if (matchedDistrict && !matchedState) {
+    for (const [s, list] of Object.entries(INDIAN_STATES_AND_DISTRICTS)) {
+      if (list.includes(matchedDistrict)) {
+        matchedState = s;
+        break;
+      }
     }
   }
 
   return { state: matchedState, district: matchedDistrict };
 }
+
