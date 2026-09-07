@@ -57,3 +57,94 @@ def list_districts(
         for r in rows
     ]
 
+
+@router.get("/reverse-geocode")
+def reverse_geocode(
+    latitude: float = Query(..., ge=-90.0, le=90.0),
+    longitude: float = Query(..., ge=-180.0, le=180.0),
+    db: Session = Depends(get_db),
+):
+    """Reverse geocode coordinates to extract address, state, district, and matched district_id."""
+    import httpx
+    from app.data.indian_districts import find_matching_state_and_district
+
+    address_text = ""
+    detected_state = ""
+    detected_district = ""
+
+    # 1. Try Nominatim via backend (with User-Agent)
+    try:
+        url = (
+            f"https://nominatim.openstreetmap.org/reverse?format=json"
+            f"&lat={latitude}&lon={longitude}&zoom=18&addressdetails=1&accept-language=en"
+        )
+        headers = {"User-Agent": "InfraGuard/1.0 (https://infraguard.gov)"}
+        with httpx.Client(timeout=4.0) as client:
+            resp = client.get(url, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                address_text = data.get("display_name", "")
+                addr = data.get("address", {})
+                raw_state = addr.get("state", "")
+                raw_dist = (
+                    addr.get("state_district")
+                    or addr.get("county")
+                    or addr.get("city")
+                    or addr.get("town")
+                    or addr.get("district")
+                    or ""
+                )
+                detected_state, detected_district = find_matching_state_and_district(
+                    f"{raw_dist} {raw_state} {address_text}"
+                )
+    except Exception:
+        pass
+
+    # 2. Fallback to Photon if needed
+    if not detected_district:
+        try:
+            p_url = f"https://photon.komoot.io/reverse?lat={latitude}&lon={longitude}"
+            with httpx.Client(timeout=3.0) as client:
+                resp = client.get(p_url)
+                if resp.status_code == 200:
+                    features = resp.json().get("features", [])
+                    if features:
+                        props = features[0].get("properties", {})
+                        if not address_text:
+                            parts = [props.get(k) for k in ["name", "street", "city", "state", "country"] if props.get(k)]
+                            address_text = ", ".join(parts)
+                        search_str = " ".join([str(v) for v in props.values() if isinstance(v, str)])
+                        detected_state, detected_district = find_matching_state_and_district(search_str)
+        except Exception:
+            pass
+
+    # 3. Match against database District record
+    district_id = None
+    district_name = None
+    if detected_district:
+        clean_name = detected_district.split("(")[0].strip()
+        matched = db.execute(
+            select(District).where(
+                District.name.ilike(f"%{clean_name}%")
+            )
+        ).scalars().all()
+
+        if matched:
+            if detected_state:
+                state_matched = [m for m in matched if m.state == detected_state]
+                chosen = state_matched[0] if state_matched else matched[0]
+            else:
+                chosen = matched[0]
+            district_id = chosen.id
+            district_name = chosen.name
+            if not detected_state and chosen.state:
+                detected_state = chosen.state
+
+    return {
+        "address": address_text,
+        "state": detected_state,
+        "district": district_name or detected_district,
+        "district_id": district_id,
+    }
+
+

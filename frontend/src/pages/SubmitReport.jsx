@@ -76,52 +76,77 @@ export default function SubmitReport() {
         }));
         toast.success('GPS location captured.');
 
-        // Auto-populate street address, state, and district from Nominatim
+        // Auto-populate street address, state, and district
         try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=en`,
-            { headers: { 'Accept-Language': 'en' } }
-          );
-          if (res.ok) {
-            const data = await res.json();
-            if (data) {
-              if (data.display_name) {
-                setForm((f) => ({ ...f, address: data.display_name }));
-              }
+          let resolvedState = '';
+          let resolvedDistId = '';
+          let resolvedDistName = '';
+          let resolvedAddress = '';
 
-              // Ensure districts array is loaded
-              let distList = districtsRef.current;
-              if (!distList || distList.length === 0) {
-                try {
-                  distList = await referenceService.districts();
-                  setDistricts(distList);
-                  districtsRef.current = distList;
-                } catch {
-                  distList = [];
+          // 1. Primary: Use InfraGuard backend reverse-geocode service (bypasses browser CORS & Nominatim blocks)
+          try {
+            const geoRes = await referenceService.reverseGeocode(lat, lng);
+            if (geoRes) {
+              if (geoRes.address) resolvedAddress = geoRes.address;
+              if (geoRes.state) resolvedState = geoRes.state;
+              if (geoRes.district_id) {
+                resolvedDistId = String(geoRes.district_id);
+                resolvedDistName = geoRes.district;
+              }
+            }
+          } catch (backendErr) {
+            console.warn('Backend reverse geocode error, falling back to Photon:', backendErr);
+          }
+
+          // 2. Fallback: Photon CORS-enabled API
+          if (!resolvedState || !resolvedDistId) {
+            try {
+              const photonRes = await fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}`);
+              if (photonRes.ok) {
+                const pData = await photonRes.json();
+                const props = pData?.features?.[0]?.properties || {};
+                const combined = Object.values(props).join(', ');
+                if (!resolvedAddress) {
+                  const parts = [props.name, props.street, props.city, props.state, props.country].filter(Boolean);
+                  resolvedAddress = parts.join(', ');
                 }
-              }
-
-              const detected = detectStateAndDistrict(data.display_name || '', data.address || {});
-              if (detected.state) {
-                setSelectedState(detected.state);
-                if (detected.district) {
-                  const match = distList.find((d) => {
-                    if (d.state !== detected.state) return false;
-                    const cleanDName = d.name.split('(')[0].trim().toLowerCase();
-                    const cleanDetected = detected.district.split('(')[0].trim().toLowerCase();
-                    return cleanDName === cleanDetected || d.name.toLowerCase() === detected.district.toLowerCase();
-                  });
-
-                  if (match) {
-                    setForm((f) => ({ ...f, district_id: String(match.id) }));
-                    toast.success(`📍 Auto-detected: ${match.name}, ${detected.state}`);
-                  } else {
-                    toast.success(`📍 Auto-detected State: ${detected.state}`);
+                const detected = detectStateAndDistrict(combined, props);
+                if (detected.state && !resolvedState) resolvedState = detected.state;
+                if (detected.district && !resolvedDistId) {
+                  let distList = districtsRef.current;
+                  if (!distList || distList.length === 0) {
+                    distList = await referenceService.districts().catch(() => []);
+                    districtsRef.current = distList;
                   }
-                } else {
-                  toast.success(`📍 Auto-detected State: ${detected.state}`);
+                  const match = distList.find((d) => {
+                    if (d.state !== (resolvedState || detected.state)) return false;
+                    const cleanD = d.name.split('(')[0].trim().toLowerCase();
+                    const cleanDet = detected.district.split('(')[0].trim().toLowerCase();
+                    return cleanD === cleanDet || d.name.toLowerCase() === detected.district.toLowerCase();
+                  });
+                  if (match) {
+                    resolvedDistId = String(match.id);
+                    resolvedDistName = match.name;
+                  }
                 }
               }
+            } catch (fallbackErr) {
+              console.warn('Photon fallback error:', fallbackErr);
+            }
+          }
+
+          // Apply resolved state, district, and address to form
+          if (resolvedAddress) {
+            setForm((f) => ({ ...f, address: resolvedAddress }));
+          }
+
+          if (resolvedState) {
+            setSelectedState(resolvedState);
+            if (resolvedDistId) {
+              setForm((f) => ({ ...f, district_id: resolvedDistId }));
+              toast.success(`📍 Auto-detected: ${resolvedDistName || 'District'}, ${resolvedState}`);
+            } else {
+              toast.success(`📍 Auto-detected State: ${resolvedState}. Please select District.`);
             }
           }
         } catch (e) {

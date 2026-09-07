@@ -153,3 +153,21 @@ def test_location_text_matching():
     assert state2 == "Maharashtra"
     assert dist2 == "Pune"
 
+
+def test_reverse_geocode_api_endpoint(client, db_session):
+    """Test GET /api/v1/reference/reverse-geocode returns matched state, district, and district_id."""
+    from app.seed import _seed_districts
+    _seed_districts(db_session)
+
+    # Coordinates for Chennai
+    resp = client.get("/api/v1/reference/reverse-geocode", params={"latitude": 13.0827, "longitude": 80.2707})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "state" in data
+    assert "district" in data
+    assert "district_id" in data
+    if data["district_id"]:
+        assert data["state"] == "Tamil Nadu"
+        assert data["district"] == "Chennai"
+
+
