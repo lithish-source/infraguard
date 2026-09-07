@@ -48,13 +48,7 @@ INFRA_TYPES = [
     ("Park Equipment", "PARK", "Benches, playground equipment", 2.5, "🌳"),
 ]
 
-DISTRICTS = [
-    ("Central District", "CD", "Maharashtra", 850000, 75.0, (18.5204, 73.8567)),
-    ("North District", "ND", "Maharashtra", 620000, 92.0, (18.5804, 73.8267)),
-    ("South District", "SD", "Maharashtra", 730000, 88.0, (18.4604, 73.8667)),
-    ("East District", "ED", "Maharashtra", 540000, 110.0, (18.5404, 73.9367)),
-    ("West District", "WD", "Maharashtra", 690000, 84.0, (18.5104, 73.7867)),
-]
+from app.data.indian_districts import get_all_districts
 
 
 def _seed_infrastructure_types(db) -> None:
@@ -69,15 +63,48 @@ def _seed_infrastructure_types(db) -> None:
 
 
 def _seed_districts(db) -> None:
-    if db.execute(select(District)).first():
-        return
-    for name, code, state, pop, area, (lat, lng) in DISTRICTS:
-        db.add(District(
-            name=name, code=code, state=state,
-            population=pop, area_sq_km=area,
-            centroid=f"{lng},{lat}",
-        ))
+    """Seed comprehensive list of Indian States and Districts.
+
+    Also migrates any legacy placeholder districts (Central, North, South, East, West)
+    to representative Indian districts so that foreign key references stay intact.
+    """
+    dummy_replacements = {
+        "Central District": ("Pune", "MH-PUNE", "Maharashtra"),
+        "North District": ("Mumbai Suburban", "MH-MUMB", "Maharashtra"),
+        "South District": ("Thane", "MH-THAN", "Maharashtra"),
+        "East District": ("Nagpur", "MH-NAGP", "Maharashtra"),
+        "West District": ("Nashik", "MH-NASH", "Maharashtra"),
+    }
+
+    # Clean up or convert any legacy dummy districts
+    for dummy_name, (rep_name, rep_code, rep_state) in dummy_replacements.items():
+        legacy = db.execute(select(District).where(District.name == dummy_name)).scalar_one_or_none()
+        if legacy:
+            legacy.name = rep_name
+            legacy.code = rep_code
+            legacy.state = rep_state
     db.commit()
+
+    # Query currently present districts
+    existing_names = set(db.execute(select(District.name)).scalars().all())
+
+    # Add all remaining Indian districts
+    to_add = []
+    for name, state, code in get_all_districts():
+        if name not in existing_names:
+            to_add.append(District(
+                name=name,
+                code=code,
+                state=state,
+                population=None,
+                area_sq_km=None,
+            ))
+            existing_names.add(name)
+
+    if to_add:
+        db.add_all(to_add)
+        db.commit()
+
 
 
 def _seed_admin(db) -> None:

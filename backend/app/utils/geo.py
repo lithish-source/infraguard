@@ -16,5 +16,6 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def make_point_wkt(lat: float, lon: float) -> str:
-    """Return simple coordinate string for a point."""
-    return f"{lon},{lat}"
+    """Return WKT string for a point."""
+    return f"POINT({lon} {lat})"
+

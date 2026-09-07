@@ -26,7 +26,8 @@ export const reportService = {
 
 export const referenceService = {
   infrastructureTypes: () => api.get('/reference/infrastructure-types').then((r) => r.data),
-  districts: () => api.get('/reference/districts').then((r) => r.data),
+  states: () => api.get('/reference/states').then((r) => r.data),
+  districts: (state) => api.get('/reference/districts', { params: state ? { state } : {} }).then((r) => r.data),
 };
 
 export const adminService = {

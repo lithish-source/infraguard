@@ -144,7 +144,17 @@ def monthly_trend(db: Session, months: int = 6) -> List[MonthlyTrendItem]:
 
 
 def district_analytics(db: Session) -> List[DistrictAnalyticsItem]:
-    districts = db.execute(select(District)).scalars().all()
+    active_district_ids = db.execute(
+        select(Report.district_id).where(Report.district_id.is_not(None)).distinct()
+    ).scalars().all()
+
+    if active_district_ids:
+        districts = db.execute(
+            select(District).where(District.id.in_(active_district_ids)).order_by(District.name)
+        ).scalars().all()
+    else:
+        districts = db.execute(select(District).order_by(District.name).limit(10)).scalars().all()
+
     items = []
     for d in districts:
         reports = db.execute(

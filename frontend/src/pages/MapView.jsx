@@ -9,11 +9,15 @@ import { reportService, referenceService } from '../services';
 const SEVERITIES = ['Low', 'Moderate', 'High', 'Critical'];
 const STATUSES = ['Reported', 'Verified', 'Assigned', 'In Progress', 'Resolved'];
 
+import { ALL_INDIAN_STATES } from '../data/indianDistricts.js';
+
 export default function MapView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [reports, setReports] = useState([]);
   const [heatmapPoints, setHeatmapPoints] = useState([]);
   const [infraTypes, setInfraTypes] = useState([]);
+  const [states, setStates] = useState(ALL_INDIAN_STATES);
+  const [selectedState, setSelectedState] = useState('');
   const [districts, setDistricts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -28,12 +32,21 @@ export default function MapView() {
   useEffect(() => {
     (async () => {
       try {
-        const [types, dist] = await Promise.all([
+        const [types, dist, fetchedStates] = await Promise.all([
           referenceService.infrastructureTypes(),
           referenceService.districts(),
+          referenceService.states().catch(() => ALL_INDIAN_STATES),
         ]);
         setInfraTypes(types);
         setDistricts(dist);
+        if (fetchedStates && fetchedStates.length > 0) {
+          setStates(fetchedStates);
+        }
+        const initialDistId = searchParams.get('district');
+        if (initialDistId && dist) {
+          const match = dist.find((d) => String(d.id) === String(initialDistId));
+          if (match && match.state) setSelectedState(match.state);
+        }
       } catch {
         // ignore
       }
@@ -98,11 +111,35 @@ export default function MapView() {
     resolved: reports.filter((r) => r.status === 'Resolved').length,
   }), [reports]);
 
+  const availableDistricts = selectedState
+    ? districts.filter((d) => d.state === selectedState)
+    : districts;
+
   return (
     <Layout>
       {/* Filters */}
       <div className="card p-4 mb-4">
         <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="label text-xs">State / UT</label>
+            <select
+              className="input text-sm py-1.5 min-w-[150px]"
+              value={selectedState}
+              onChange={(e) => {
+                const newState = e.target.value;
+                setSelectedState(newState);
+                const curDist = districts.find((d) => String(d.id) === String(filters.district_id));
+                if (curDist && curDist.state !== newState) {
+                  updateFilter('district', '');
+                }
+              }}
+            >
+              <option value="">All States</option>
+              {states.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="label text-xs">District</label>
             <select
@@ -110,9 +147,11 @@ export default function MapView() {
               value={filters.district_id}
               onChange={(e) => updateFilter('district', e.target.value)}
             >
-              <option value="">All Districts</option>
-              {districts.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+              <option value="">{selectedState ? 'All Districts in State' : 'All Districts'}</option>
+              {availableDistricts.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}{!selectedState && d.state ? ` (${d.state})` : ''}
+                </option>
               ))}
             </select>
           </div>

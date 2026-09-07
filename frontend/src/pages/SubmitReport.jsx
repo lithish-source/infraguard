@@ -5,6 +5,7 @@ import Layout from '../components/Layout.jsx';
 import Loading from '../components/Loading.jsx';
 import { reportService, referenceService } from '../services';
 import { useAuth } from '../context/AuthContext';
+import { ALL_INDIAN_STATES, detectStateAndDistrict } from '../data/indianDistricts.js';
 
 export default function SubmitReport() {
   const navigate = useNavigate();
@@ -12,6 +13,8 @@ export default function SubmitReport() {
   const fileInputRef = useRef(null);
 
   const [infraTypes, setInfraTypes] = useState([]);
+  const [states, setStates] = useState(ALL_INDIAN_STATES);
+  const [selectedState, setSelectedState] = useState('');
   const [districts, setDistricts] = useState([]);
   const [loadingRefs, setLoadingRefs] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -32,12 +35,16 @@ export default function SubmitReport() {
   useEffect(() => {
     (async () => {
       try {
-        const [types, dist] = await Promise.all([
+        const [types, dist, fetchedStates] = await Promise.all([
           referenceService.infrastructureTypes(),
           referenceService.districts(),
+          referenceService.states().catch(() => ALL_INDIAN_STATES),
         ]);
         setInfraTypes(types);
         setDistricts(dist);
+        if (fetchedStates && fetchedStates.length > 0) {
+          setStates(fetchedStates);
+        }
       } catch {
         toast.error('Could not load reference data.');
       } finally {
@@ -70,6 +77,19 @@ export default function SubmitReport() {
             const data = await res.json();
             if (data && data.display_name) {
               setForm((f) => ({ ...f, address: data.display_name }));
+              const detected = detectStateAndDistrict(data.display_name);
+              if (detected.state) {
+                setSelectedState(detected.state);
+                if (detected.district) {
+                  const match = districts.find(
+                    (d) => d.state === detected.state && d.name.toLowerCase() === detected.district.toLowerCase()
+                  );
+                  if (match) {
+                    setForm((f) => ({ ...f, district_id: String(match.id) }));
+                    toast.success(`Location identified: ${match.name}, ${detected.state}`);
+                  }
+                }
+              }
             }
           }
         } catch (e) {
@@ -190,6 +210,18 @@ export default function SubmitReport() {
     }
   };
 
+  const handleStateChange = (newState) => {
+    setSelectedState(newState);
+    const currentDist = districts.find((d) => String(d.id) === String(form.district_id));
+    if (currentDist && currentDist.state !== newState) {
+      setForm((f) => ({ ...f, district_id: '' }));
+    }
+  };
+
+  const availableDistricts = selectedState
+    ? districts.filter((d) => d.state === selectedState)
+    : districts;
+
   if (loadingRefs) return <Layout><Loading size="lg" label="Loading form..." /></Layout>;
 
   return (
@@ -217,21 +249,36 @@ export default function SubmitReport() {
             {errors.title && <p className="text-xs text-red-600 mt-1">{errors.title}</p>}
           </div>
 
-          {/* Category + District */}
+          {/* Category */}
+          <div>
+            <label className="label">Damage Category *</label>
+            <select
+              className="input"
+              value={form.category_id}
+              onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+            >
+              <option value="">Select category...</option>
+              {infraTypes.map((t) => (
+                <option key={t.id} value={t.id}>{t.icon} {t.name}</option>
+              ))}
+            </select>
+            {errors.category_id && <p className="text-xs text-red-600 mt-1">{errors.category_id}</p>}
+          </div>
+
+          {/* State + District */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="label">Damage Category *</label>
+              <label className="label">State / UT (optional)</label>
               <select
                 className="input"
-                value={form.category_id}
-                onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+                value={selectedState}
+                onChange={(e) => handleStateChange(e.target.value)}
               >
-                <option value="">Select category...</option>
-                {infraTypes.map((t) => (
-                  <option key={t.id} value={t.id}>{t.icon} {t.name}</option>
+                <option value="">Select State / UT...</option>
+                {states.map((s) => (
+                  <option key={s} value={s}>{s}</option>
                 ))}
               </select>
-              {errors.category_id && <p className="text-xs text-red-600 mt-1">{errors.category_id}</p>}
             </div>
             <div>
               <label className="label">District (optional)</label>
@@ -240,9 +287,13 @@ export default function SubmitReport() {
                 value={form.district_id}
                 onChange={(e) => setForm({ ...form, district_id: e.target.value })}
               >
-                <option value="">Auto-detect</option>
-                {districts.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
+                <option value="">
+                  {selectedState ? 'Select District or Auto-detect' : 'Auto-detect (or select State first)'}
+                </option>
+                {availableDistricts.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}{!selectedState && d.state ? ` (${d.state})` : ''}
+                  </option>
                 ))}
               </select>
             </div>
