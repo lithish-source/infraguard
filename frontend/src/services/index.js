@@ -44,6 +44,7 @@ export const adminService = {
   updateStatus: (id, payload) => api.post(`/admin/reports/${id}/status`, payload).then((r) => r.data),
   updateSeverity: (id, payload) => api.post(`/admin/reports/${id}/severity`, payload).then((r) => r.data),
   assignTeam: (id, payload) => api.post(`/admin/reports/${id}/assign`, payload).then((r) => r.data),
+  deleteReport: (id) => api.delete(`/admin/reports/${id}`).then((r) => r.data),
   recomputePriorities: () => api.post('/admin/priority/recompute').then((r) => r.data),
 };
 

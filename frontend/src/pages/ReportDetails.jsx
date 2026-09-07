@@ -6,7 +6,7 @@ import Loading from '../components/Loading.jsx';
 import { ErrorState } from '../components/EmptyState.jsx';
 import { PriorityRadar } from '../components/Charts.jsx';
 import DamageMap from '../components/DamageMap.jsx';
-import { reportService } from '../services';
+import { reportService, adminService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import {
   severityBadge, statusBadge, formatDate, timeAgo, priorityColor, SEVERITY_COLORS,
@@ -19,6 +19,7 @@ export default function ReportDetails() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [adminActionLoading, setAdminActionLoading] = useState(false);
 
   // Verification form
   const [verifForm, setVerifForm] = useState({
@@ -26,6 +27,44 @@ export default function ReportDetails() {
   });
   const [verifImage, setVerifImage] = useState(null);
   const [verifying, setVerifying] = useState(false);
+
+  const handleAdminProgress = async () => {
+    setAdminActionLoading(true);
+    try {
+      const res = await adminService.updateStatus(id, {
+        status: 'In Progress',
+        notes: 'Repair team is currently working on site.',
+      });
+      setReport((prev) => ({ ...prev, status: 'In Progress' }));
+      toast.success('Status updated to "In Progress".');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Update failed.');
+    } finally {
+      setAdminActionLoading(false);
+    }
+  };
+
+  const handleAdminResolveAndDelete = async () => {
+    const confirm = window.confirm(
+      `Mark work as completed for report "${report?.reference_code}"? This will resolve and remove the report from active maps and lists.`
+    );
+    if (!confirm) return;
+
+    setAdminActionLoading(true);
+    try {
+      await adminService.updateStatus(id, {
+        status: 'Resolved',
+        notes: 'Work completed successfully on site.',
+        delete_on_resolved: true,
+      });
+      toast.success('Work is done! Report resolved and removed.');
+      navigate('/admin/reports');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to resolve and remove.');
+    } finally {
+      setAdminActionLoading(false);
+    }
+  };
 
   const fetchReport = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
@@ -139,6 +178,47 @@ export default function ReportDetails() {
           )}
         </div>
       </div>
+
+      {/* Admin Quick Control Banner */}
+      {isAdmin && (
+        <div className="card p-4 mb-6 bg-slate-900 text-white border-brand-500/40 flex items-center justify-between flex-wrap gap-3 shadow-md">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">👮</span>
+            <div>
+              <div className="font-semibold text-sm">Administrator Work Controls</div>
+              <div className="text-xs text-slate-400">
+                Update progress to In Progress or mark Work Done to automatically resolve &amp; delete this report.
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={adminActionLoading || report.status === 'In Progress'}
+              onClick={handleAdminProgress}
+              className="btn bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs py-1.5 px-3 flex items-center gap-1.5 shadow-sm"
+            >
+              <span>🟡</span>
+              <span>{report.status === 'In Progress' ? 'In Progress' : 'Mark In Progress'}</span>
+            </button>
+            <button
+              type="button"
+              disabled={adminActionLoading}
+              onClick={handleAdminResolveAndDelete}
+              className="btn bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs py-1.5 px-3 flex items-center gap-1.5 font-semibold shadow-sm"
+            >
+              <span>✅</span>
+              <span>Work Done &amp; Delete</span>
+            </button>
+            <Link
+              to="/admin/reports"
+              className="btn-ghost text-xs text-slate-300 hover:text-white"
+            >
+              Admin Portal →
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Left: images + description + map */}

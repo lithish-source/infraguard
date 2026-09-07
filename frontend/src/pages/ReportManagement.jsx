@@ -81,16 +81,72 @@ export default function ReportManagement() {
     if (!selected) return;
     setActionLoading(true);
     try {
-      const updated = await adminService.updateStatus(selected.id, {
+      const res = await adminService.updateStatus(selected.id, {
         status: statusForm.status,
         notes: statusForm.notes || null,
         assigned_team: statusForm.assigned_team || null,
       });
-      setSelected(updated);
-      toast.success(`Status updated to "${updated.status}".`);
-      fetchReports();
+      if (res?.deleted || statusForm.status === 'Resolved') {
+        const deletedId = selected.id;
+        setReports((prev) => prev.filter((r) => r.id !== deletedId));
+        setTotal((t) => Math.max(0, t - 1));
+        setSelected(null);
+        toast.success('Work marked as done! Report has been resolved and removed.');
+      } else {
+        setSelected(res);
+        toast.success(`Status updated to "${res.status}".`);
+        fetchReports();
+      }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Update failed.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleQuickStatus = async (newStatus, customNotes = '') => {
+    if (!selected) return;
+    setActionLoading(true);
+    try {
+      const res = await adminService.updateStatus(selected.id, {
+        status: newStatus,
+        notes: customNotes || (newStatus === 'In Progress' ? 'Work is currently in progress.' : null),
+        assigned_team: statusForm.assigned_team || null,
+      });
+      if (res?.deleted || newStatus === 'Resolved') {
+        const deletedId = selected.id;
+        setReports((prev) => prev.filter((r) => r.id !== deletedId));
+        setTotal((t) => Math.max(0, t - 1));
+        setSelected(null);
+        toast.success('Work marked as done! Report resolved and removed.');
+      } else {
+        setSelected(res);
+        setStatusForm((prev) => ({ ...prev, status: newStatus }));
+        toast.success(`Status set to "${newStatus}".`);
+        fetchReports();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Update failed.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteReport = async () => {
+    if (!selected) return;
+    const confirm = window.confirm(`Are you sure you want to delete report "${selected.reference_code}"? It will be permanently removed.`);
+    if (!confirm) return;
+
+    setActionLoading(true);
+    try {
+      await adminService.deleteReport(selected.id);
+      const deletedId = selected.id;
+      setReports((prev) => prev.filter((r) => r.id !== deletedId));
+      setTotal((t) => Math.max(0, t - 1));
+      setSelected(null);
+      toast.success('Report deleted successfully.');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Deletion failed.');
     } finally {
       setActionLoading(false);
     }
@@ -252,6 +308,49 @@ export default function ReportManagement() {
                 </div>
               </div>
 
+              {/* Quick Work Actions */}
+              <div className="card p-5 space-y-3 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-900 dark:text-white text-sm">⚡ Quick Work Updates</h3>
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    {selected.status}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={actionLoading || selected.status === 'In Progress'}
+                    onClick={() => handleQuickStatus('In Progress', 'Repair team is currently on site conducting repair work.')}
+                    className="btn bg-amber-500 hover:bg-amber-600 text-white text-xs py-2 px-2.5 flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                  >
+                    <span>🟡</span>
+                    <span>In Progress</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={() => handleQuickStatus('Resolved', 'Work completed successfully on site.')}
+                    className="btn bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-2 px-2.5 flex items-center justify-center gap-1.5 shadow-sm transition-all font-semibold"
+                  >
+                    <span>✅</span>
+                    <span>Work Done &amp; Delete</span>
+                  </button>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700/60">
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={handleDeleteReport}
+                    className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 flex items-center gap-1 hover:underline cursor-pointer"
+                  >
+                    🗑️ Delete report permanently
+                  </button>
+                  <span className="text-[11px] text-slate-400">
+                    Resolving deletes &amp; removes
+                  </span>
+                </div>
+              </div>
+
               {/* Status update */}
               <form onSubmit={handleStatusChange} className="card p-5 space-y-3">
                 <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Update Status</h3>
@@ -262,6 +361,11 @@ export default function ReportManagement() {
                 >
                   {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
+                {statusForm.status === 'Resolved' && (
+                  <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 text-xs">
+                    ⚡ <b>Work Completed:</b> Updating to "Resolved" will mark the work done and automatically remove/delete this report from active lists and maps.
+                  </div>
+                )}
                 <input
                   type="text"
                   className="input text-sm"

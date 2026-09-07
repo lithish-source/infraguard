@@ -256,6 +256,7 @@ class ReportStatusUpdate(BaseModel):
     status: str
     notes: Optional[str] = None
     assigned_team: Optional[str] = None
+    delete_on_resolved: Optional[bool] = True
 
 
 class SeverityUpdate(BaseModel):

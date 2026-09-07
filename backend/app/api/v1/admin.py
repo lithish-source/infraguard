@@ -66,7 +66,7 @@ def participation(db: Session = Depends(get_db), _=Depends(get_current_admin)):
     return analytics_service.citizen_participation(db)
 
 
-@router.post("/reports/{report_id}/status", response_model=ReportOut)
+@router.post("/reports/{report_id}/status")
 def update_status(
     report_id: int,
     payload: ReportStatusUpdate,
@@ -74,8 +74,23 @@ def update_status(
     admin: User = Depends(get_current_admin),
 ):
     return report_service.update_status(
-        db, report_id, admin, payload.status, payload.notes, payload.assigned_team,
+        db,
+        report_id,
+        admin,
+        payload.status,
+        payload.notes,
+        payload.assigned_team,
+        delete_on_resolved=payload.delete_on_resolved if payload.delete_on_resolved is not None else True,
     )
+
+
+@router.delete("/reports/{report_id}")
+def delete_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    return report_service.delete_report(db, report_id, admin)
 
 
 @router.post("/reports/{report_id}/severity", response_model=ReportOut)

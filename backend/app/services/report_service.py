@@ -530,9 +530,14 @@ def _save_upload_sync(file: UploadFile, prefix: str = "img"):
 
 # ---------- Admin actions ----------
 def update_status(
-    db: Session, report_id: int, admin: User, new_status: str, notes: Optional[str] = None,
+    db: Session,
+    report_id: int,
+    admin: User,
+    new_status: str,
+    notes: Optional[str] = None,
     assigned_team: Optional[str] = None,
-) -> ReportOut:
+    delete_on_resolved: bool = True,
+) -> dict:
     report = db.get(Report, report_id)
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
@@ -545,14 +550,44 @@ def update_status(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid status: {new_status}")
 
     old = report.status
+    ref_code = report.reference_code
+    rep_user_id = report.user_id
+
+    # If work is done (Resolved) and delete_on_resolved is True
+    if new_status == STATUS_RESOLVED and delete_on_resolved:
+        # Notify the citizen that work is completed
+        db.add(Notification(
+            user_id=rep_user_id,
+            report_id=None,
+            title="Infrastructure Work Completed ✅",
+            message=f"Work is done on report {ref_code}! {notes or 'The reported damage has been resolved and closed.'}",
+            type="success",
+        ))
+
+        # Clean up image files from disk
+        if report.images:
+            for img in report.images:
+                if img.file_path and os.path.exists(img.file_path):
+                    try:
+                        os.remove(img.file_path)
+                    except OSError:
+                        pass
+
+        db.delete(report)
+        db.commit()
+        return {
+            "id": report_id,
+            "reference_code": ref_code,
+            "status": STATUS_RESOLVED,
+            "deleted": True,
+            "message": f"Work is done! Report {ref_code} has been resolved and removed from the active system.",
+        }
+
+    # Normal status update (e.g. In Progress, Assigned, etc.)
     report.status = new_status
     if assigned_team is not None:
         report.assigned_team = assigned_team
-    if new_status == STATUS_RESOLVED:
-        report.resolved_at = datetime.utcnow()
-        if notes:
-            report.resolution_notes = notes
-    elif notes:
+    if notes:
         report.resolution_notes = notes
 
     db.add(AdminAction(
@@ -561,13 +596,52 @@ def update_status(
     ))
     db.add(Notification(
         user_id=report.user_id, report_id=report.id,
-        title="Report status updated",
-        message=f"Your report {report.reference_code} is now: {new_status}.",
+        title=f"Report Status: {new_status}",
+        message=f"Report {report.reference_code} status updated to: {new_status}. {notes or ''}".strip(),
         type="info",
     ))
     db.commit()
     db.refresh(report)
-    return _to_report_out(db, report)
+    out = _to_report_out(db, report)
+    out_dict = out.model_dump() if hasattr(out, 'model_dump') else out.dict()
+    out_dict["deleted"] = False
+    return out_dict
+
+
+def delete_report(db: Session, report_id: int, admin: User) -> dict:
+    report = db.get(Report, report_id)
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
+
+    ref_code = report.reference_code
+    rep_user_id = report.user_id
+
+    # Clean up uploaded files from disk
+    if report.images:
+        for img in report.images:
+            if img.file_path and os.path.exists(img.file_path):
+                try:
+                    os.remove(img.file_path)
+                except OSError:
+                    pass
+
+    if rep_user_id:
+        db.add(Notification(
+            user_id=rep_user_id,
+            report_id=None,
+            title="Report Closed / Removed",
+            message=f"Report {ref_code} has been resolved and removed by an administrator.",
+            type="info",
+        ))
+
+    db.delete(report)
+    db.commit()
+    return {
+        "id": report_id,
+        "reference_code": ref_code,
+        "deleted": True,
+        "message": f"Report {ref_code} has been deleted successfully.",
+    }
 
 
 def update_severity(
