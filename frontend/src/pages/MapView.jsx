@@ -113,7 +113,7 @@ export default function MapView() {
 
   const availableDistricts = selectedState
     ? districts.filter((d) => d.state === selectedState)
-    : districts;
+    : [];
 
   return (
     <Layout>
@@ -121,17 +121,14 @@ export default function MapView() {
       <div className="card p-4 mb-4">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="label text-xs">State / UT</label>
+            <label className="label text-xs font-semibold">1. State / UT</label>
             <select
               className="input text-sm py-1.5 min-w-[150px]"
               value={selectedState}
               onChange={(e) => {
                 const newState = e.target.value;
                 setSelectedState(newState);
-                const curDist = districts.find((d) => String(d.id) === String(filters.district_id));
-                if (curDist && curDist.state !== newState) {
-                  updateFilter('district', '');
-                }
+                updateFilter('district', '');
               }}
             >
               <option value="">All States</option>
@@ -141,16 +138,19 @@ export default function MapView() {
             </select>
           </div>
           <div>
-            <label className="label text-xs">District</label>
+            <label className="label text-xs font-semibold">2. District</label>
             <select
-              className="input text-sm py-1.5 min-w-[160px]"
+              className={`input text-sm py-1.5 min-w-[160px] ${!selectedState ? 'opacity-60 cursor-not-allowed' : ''}`}
               value={filters.district_id}
               onChange={(e) => updateFilter('district', e.target.value)}
+              disabled={!selectedState}
             >
-              <option value="">{selectedState ? 'All Districts in State' : 'All Districts'}</option>
+              <option value="">
+                {selectedState ? `All Districts in ${selectedState}` : '← Select State first'}
+              </option>
               {availableDistricts.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.name}{!selectedState && d.state ? ` (${d.state})` : ''}
+                  {d.name}
                 </option>
               ))}
             </select>

@@ -218,9 +218,10 @@ export default function SubmitReport() {
     }
   };
 
+  // Only show districts once a state has been selected to eliminate unnecessary workload
   const availableDistricts = selectedState
     ? districts.filter((d) => d.state === selectedState)
-    : districts;
+    : [];
 
   if (loadingRefs) return <Layout><Loading size="lg" label="Loading form..." /></Layout>;
 
@@ -265,37 +266,62 @@ export default function SubmitReport() {
             {errors.category_id && <p className="text-xs text-red-600 mt-1">{errors.category_id}</p>}
           </div>
 
-          {/* State + District */}
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label">State / UT (optional)</label>
-              <select
-                className="input"
-                value={selectedState}
-                onChange={(e) => handleStateChange(e.target.value)}
-              >
-                <option value="">Select State / UT...</option>
-                {states.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+          {/* Location: Guided State -> District Selection */}
+          <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                📍 Location Selection
+              </span>
+              {selectedState && (
+                <span className="text-xs bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300 font-medium px-2 py-0.5 rounded-full">
+                  {availableDistricts.length} districts in {selectedState}
+                </span>
+              )}
             </div>
-            <div>
-              <label className="label">District (optional)</label>
-              <select
-                className="input"
-                value={form.district_id}
-                onChange={(e) => setForm({ ...form, district_id: e.target.value })}
-              >
-                <option value="">
-                  {selectedState ? 'Select District or Auto-detect' : 'Auto-detect (or select State first)'}
-                </option>
-                {availableDistricts.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}{!selectedState && d.state ? ` (${d.state})` : ''}
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Step 1: State / UT
+                </label>
+                <select
+                  className="input text-sm"
+                  value={selectedState}
+                  onChange={(e) => handleStateChange(e.target.value)}
+                >
+                  <option value="">-- Select State / UT first --</option>
+                  {states.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Step 2: District {selectedState ? `(${selectedState})` : ''}
+                </label>
+                <select
+                  className={`input text-sm ${!selectedState ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-900' : ''}`}
+                  value={form.district_id}
+                  onChange={(e) => setForm({ ...form, district_id: e.target.value })}
+                  disabled={!selectedState}
+                >
+                  <option value="">
+                    {selectedState
+                      ? `-- Select ${selectedState} District --`
+                      : '← Please select a State first'}
                   </option>
-                ))}
-              </select>
+                  {availableDistricts.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+                {!selectedState && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Select your State in Step 1 to see its districts here.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
