@@ -98,3 +98,21 @@ export function priorityColor(score) {
   if (score >= 20) return 'text-blue-600 dark:text-blue-400';
   return 'text-slate-500';
 }
+
+export function getCategoryFallbackImage(categoryName = '', damageType = '') {
+  const cat = `${categoryName || ''} ${damageType || ''}`.toLowerCase();
+  if (cat.includes('water') || cat.includes('flood') || cat.includes('pipe') || cat.includes('drain')) {
+    return 'https://images.unsplash.com/photo-1547683905-f686c993aae5?w=800&auto=format&fit=crop&q=80';
+  }
+  if (cat.includes('bridge') || cat.includes('flyover')) {
+    return 'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=800&auto=format&fit=crop&q=80';
+  }
+  if (cat.includes('electric') || cat.includes('power') || cat.includes('light') || cat.includes('wire')) {
+    return 'https://images.unsplash.com/photo-1509390144018-eeaf65052242?w=800&auto=format&fit=crop&q=80';
+  }
+  if (cat.includes('building') || cat.includes('wall') || cat.includes('structure') || cat.includes('crack')) {
+    return 'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=800&auto=format&fit=crop&q=80';
+  }
+  // Default Road / Pothole damage
+  return 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=800&auto=format&fit=crop&q=80';
+}

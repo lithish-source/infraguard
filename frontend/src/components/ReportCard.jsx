@@ -1,9 +1,13 @@
-import { severityBadge, statusBadge, timeAgo, priorityColor, SEVERITY_COLORS } from '../utils/helpers';
+import {
+  severityBadge, statusBadge, timeAgo, priorityColor, SEVERITY_COLORS,
+  getCategoryFallbackImage,
+} from '../utils/helpers';
 import { Link } from 'react-router-dom';
 
 export default function ReportCard({ report }) {
   const severity = report.final_severity || report.ai_severity;
   const priorityScore = report.priority_score;
+  const fallbackImg = getCategoryFallbackImage(report.category_name, report.ai_damage_type);
 
   return (
     <Link
@@ -12,18 +16,16 @@ export default function ReportCard({ report }) {
     >
       {/* Thumbnail */}
       <div className="w-20 h-20 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 flex-shrink-0">
-        {report.image_url ? (
-          <img
-            src={report.image_url}
-            alt={report.title}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-2xl text-slate-400">
-            📷
-          </div>
-        )}
+        <img
+          src={report.image_url || fallbackImg}
+          alt={report.title}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = fallbackImg;
+          }}
+        />
       </div>
 
       {/* Body */}

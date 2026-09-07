@@ -10,6 +10,7 @@ import { reportService, adminService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import {
   severityBadge, statusBadge, formatDate, timeAgo, priorityColor, SEVERITY_COLORS,
+  getCategoryFallbackImage,
 } from '../utils/helpers';
 
 export default function ReportDetails() {
@@ -224,7 +225,7 @@ export default function ReportDetails() {
         {/* Left: images + description + map */}
         <div className="lg:col-span-2 space-y-6">
           {/* Images */}
-          {report.images?.length > 0 && (
+          {report.images?.length > 0 ? (
             <div className="card p-4">
               <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Photos ({report.images.length})</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -236,7 +237,15 @@ export default function ReportDetails() {
                     rel="noreferrer"
                     className="aspect-square rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 group relative"
                   >
-                    <img src={img.file_url} alt={img.caption || ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    <img
+                      src={img.file_url}
+                      alt={img.caption || report.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = getCategoryFallbackImage(report.category_name, report.ai_damage_type);
+                      }}
+                    />
                     {img.is_primary && (
                       <span className="absolute top-1 left-1 bg-brand-600 text-white text-[10px] px-1.5 py-0.5 rounded">
                         Primary
@@ -244,6 +253,22 @@ export default function ReportDetails() {
                     )}
                   </a>
                 ))}
+              </div>
+            </div>
+          ) : (
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-slate-900 dark:text-white">Incident Photo</h3>
+                <span className="text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded">
+                  Demo Reference Photo
+                </span>
+              </div>
+              <div className="rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 max-h-96">
+                <img
+                  src={getCategoryFallbackImage(report.category_name, report.ai_damage_type)}
+                  alt={report.title}
+                  className="w-full h-64 sm:h-80 object-cover"
+                />
               </div>
             </div>
           )}

@@ -300,6 +300,18 @@ def _seed_demo_reports(db, citizens: List[User], n: int = 60) -> None:
                 ))
             except Exception as e:
                 print(f"[seed] Could not copy image: {e}")
+        else:
+            category_fallbacks = {
+                "Water Pipeline": "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=800&auto=format&fit=crop&q=80",
+                "Bridge": "https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=800&auto=format&fit=crop&q=80",
+                "Streetlight": "https://images.unsplash.com/photo-1509390144018-eeaf65052242?w=800&auto=format&fit=crop&q=80",
+            }
+            fb_url = category_fallbacks.get(infra.name, "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=800&auto=format&fit=crop&q=80")
+            db.add(Image(
+                report_id=report.id, user_id=author.id,
+                file_path="", file_url=fb_url,
+                is_primary=True,
+            ))
 
         # Verifications
         n_verif = min(report.verification_count, len(citizens) - 1)
