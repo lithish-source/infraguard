@@ -88,6 +88,21 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleQuickAssign = async (reportId, team = 'Team Alpha') => {
+    setUpdatingId(reportId);
+    try {
+      await adminService.assignTeam(reportId, { team, notes: 'Quick assigned from dashboard' });
+      setActiveReports((prev) =>
+        prev.map((r) => (r.id === reportId ? { ...r, assigned_team: team, status: 'Assigned' } : r))
+      );
+      toast.success(`Report assigned to ${team}.`);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Assignment failed.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const handleRecompute = async () => {
     try {
       const res = await adminService.recomputePriorities();
@@ -199,6 +214,7 @@ export default function AdminDashboard() {
                   <th className="py-2.5 px-3">Location</th>
                   <th className="py-2.5 px-3">Severity</th>
                   <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">Assigned Team</th>
                   <th className="py-2.5 px-3 text-right">Quick Work Action</th>
                 </tr>
               </thead>
@@ -219,6 +235,22 @@ export default function AdminDashboard() {
                       </td>
                       <td className="py-3 px-3">
                         {statusBadge(r.status)}
+                      </td>
+                      <td className="py-3 px-3">
+                        <select
+                          value={r.assigned_team || ''}
+                          disabled={isUpdating}
+                          onChange={(e) => {
+                            if (e.target.value) handleQuickAssign(r.id, e.target.value);
+                          }}
+                          className="text-xs py-1 px-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer font-medium focus:ring-1 focus:ring-brand-500"
+                        >
+                          <option value="">{r.assigned_team ? `👷 ${r.assigned_team}` : '➕ Assign Team...'}</option>
+                          <option value="Team Alpha">👷 Team Alpha</option>
+                          <option value="Team Bravo">👷 Team Bravo</option>
+                          <option value="Team Charlie">👷 Team Charlie</option>
+                          <option value="Team Delta">👷 Team Delta</option>
+                        </select>
                       </td>
                       <td className="py-3 px-3 text-right">
                         <div className="inline-flex items-center gap-1.5">

@@ -67,6 +67,32 @@ export default function ReportDetails() {
     }
   };
 
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [customTeam, setCustomTeam] = useState('');
+
+  const handleAssignTeam = async (teamName) => {
+    const finalTeam = teamName || customTeam.trim() || 'Team Alpha';
+    setAdminActionLoading(true);
+    try {
+      const updated = await adminService.assignTeam(id, {
+        team: finalTeam,
+        notes: 'Assigned via Administrator Work Controls',
+      });
+      setReport((prev) => ({
+        ...prev,
+        assigned_team: finalTeam,
+        status: updated.status || 'Assigned',
+      }));
+      setAssignModalOpen(false);
+      setCustomTeam('');
+      toast.success(`Report assigned to "${finalTeam}".`);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Assignment failed.');
+    } finally {
+      setAdminActionLoading(false);
+    }
+  };
+
   const fetchReport = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
     try {
@@ -182,42 +208,93 @@ export default function ReportDetails() {
 
       {/* Admin Quick Control Banner */}
       {isAdmin && (
-        <div className="card p-4 mb-6 bg-slate-900 text-white border-brand-500/40 flex items-center justify-between flex-wrap gap-3 shadow-md">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">👮</span>
-            <div>
-              <div className="font-semibold text-sm">Administrator Work Controls</div>
-              <div className="text-xs text-slate-400">
-                Update progress to In Progress or mark Work Done to automatically resolve &amp; delete this report.
+        <div className="card p-4 mb-6 bg-slate-900 text-white border-brand-500/40 shadow-md">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">👮</span>
+              <div>
+                <div className="font-semibold text-sm">Administrator Work Controls</div>
+                <div className="text-xs text-slate-400">
+                  Assign response team, update progress to In Progress, or mark Work Done to resolve &amp; delete.
+                </div>
               </div>
             </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                disabled={adminActionLoading}
+                onClick={() => setAssignModalOpen((v) => !v)}
+                className="btn bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs py-1.5 px-3 flex items-center gap-1.5 font-medium shadow-sm transition-all"
+              >
+                <span>👷</span>
+                <span>{report.assigned_team ? `Team: ${report.assigned_team}` : 'Assign Team'}</span>
+                <span className="text-[10px] ml-0.5">{assignModalOpen ? '▲' : '▼'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={adminActionLoading || report.status === 'In Progress'}
+                onClick={handleAdminProgress}
+                className="btn bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs py-1.5 px-3 flex items-center gap-1.5 shadow-sm"
+              >
+                <span>🟡</span>
+                <span>{report.status === 'In Progress' ? 'In Progress' : 'Mark In Progress'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={adminActionLoading}
+                onClick={handleAdminResolveAndDelete}
+                className="btn bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs py-1.5 px-3 flex items-center gap-1.5 font-semibold shadow-sm"
+              >
+                <span>✅</span>
+                <span>Work Done &amp; Delete</span>
+              </button>
+              <Link
+                to="/admin/reports"
+                className="btn-ghost text-xs text-slate-300 hover:text-white"
+              >
+                Admin Portal →
+              </Link>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={adminActionLoading || report.status === 'In Progress'}
-              onClick={handleAdminProgress}
-              className="btn bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs py-1.5 px-3 flex items-center gap-1.5 shadow-sm"
-            >
-              <span>🟡</span>
-              <span>{report.status === 'In Progress' ? 'In Progress' : 'Mark In Progress'}</span>
-            </button>
-            <button
-              type="button"
-              disabled={adminActionLoading}
-              onClick={handleAdminResolveAndDelete}
-              className="btn bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs py-1.5 px-3 flex items-center gap-1.5 font-semibold shadow-sm"
-            >
-              <span>✅</span>
-              <span>Work Done &amp; Delete</span>
-            </button>
-            <Link
-              to="/admin/reports"
-              className="btn-ghost text-xs text-slate-300 hover:text-white"
-            >
-              Admin Portal →
-            </Link>
-          </div>
+
+          {/* Expandable Assign Team Drawer */}
+          {assignModalOpen && (
+            <div className="mt-3 pt-3 border-t border-slate-700/80 flex flex-wrap items-center gap-2 animate-fade-in">
+              <span className="text-xs text-slate-300 font-medium">Quick Assign:</span>
+              {['Team Alpha', 'Team Bravo', 'Team Charlie', 'Team Delta'].map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  disabled={adminActionLoading}
+                  onClick={() => handleAssignTeam(t)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                    report.assigned_team === t
+                      ? 'bg-blue-600 text-white border-blue-500 font-semibold'
+                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:border-blue-400 hover:bg-slate-700'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+              <div className="flex items-center gap-1 ml-auto">
+                <input
+                  type="text"
+                  placeholder="Custom team name..."
+                  value={customTeam}
+                  onChange={(e) => setCustomTeam(e.target.value)}
+                  className="input text-xs py-1 px-2.5 w-44 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
+                />
+                <button
+                  type="button"
+                  disabled={adminActionLoading || !customTeam.trim()}
+                  onClick={() => handleAssignTeam(customTeam.trim())}
+                  className="btn bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs py-1 px-3"
+                >
+                  Assign
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -296,12 +373,23 @@ export default function ReportDetails() {
                 <div className="font-medium text-slate-700 dark:text-slate-300">Reported On</div>
                 <div>{formatDate(report.created_at)}</div>
               </div>
-              {report.assigned_team && (
-                <div>
-                  <div className="font-medium text-slate-700 dark:text-slate-300">Assigned Team</div>
-                  <div>{report.assigned_team}</div>
+              <div>
+                <div className="font-medium text-slate-700 dark:text-slate-300">Assigned Team</div>
+                <div className="flex items-center gap-2">
+                  <span className={report.assigned_team ? 'text-slate-900 dark:text-white font-medium' : 'text-slate-400 italic'}>
+                    {report.assigned_team || 'Unassigned'}
+                  </span>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setAssignModalOpen(true)}
+                      className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 underline font-medium cursor-pointer"
+                    >
+                      {report.assigned_team ? 'Change' : 'Assign'}
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
               {report.resolved_at && (
                 <div>
                   <div className="font-medium text-slate-700 dark:text-slate-300">Resolved On</div>
