@@ -410,11 +410,27 @@ export default function ReportManagement() {
 
               {/* Assign team */}
               <form onSubmit={handleAssign} className="card p-5 space-y-3">
-                <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Quick Assign Team</h3>
+                <h3 className="font-semibold text-slate-900 dark:text-white text-sm">👷 Quick Assign Team</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Team Alpha', 'Team Bravo', 'Team Charlie', 'Team Delta'].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setAssignForm({ ...assignForm, team: t })}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                        assignForm.team === t
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-500'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
                 <input
                   type="text"
                   className="input text-sm"
-                  placeholder="e.g. Team Alpha"
+                  placeholder="e.g. Team Alpha or custom crew"
                   value={assignForm.team}
                   onChange={(e) => setAssignForm({ ...assignForm, team: e.target.value })}
                 />
@@ -425,8 +441,8 @@ export default function ReportManagement() {
                   value={assignForm.notes}
                   onChange={(e) => setAssignForm({ ...assignForm, notes: e.target.value })}
                 />
-                <button type="submit" disabled={actionLoading} className="btn-secondary w-full text-sm">
-                  {actionLoading ? 'Assigning...' : 'Assign Team'}
+                <button type="submit" disabled={actionLoading || !assignForm.team} className="btn-secondary w-full text-sm">
+                  {actionLoading ? 'Assigning...' : 'Assign Team & Set Status to "Assigned"'}
                 </button>
               </form>
             </>
